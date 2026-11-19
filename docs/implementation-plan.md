@@ -71,13 +71,13 @@ Needs from Cru: test API keys for each provider with low spend limits, entered b
 ### Phase 2. Users, teams, and keys
 
 - Turn off shared bootstrap login (`disable_env_credential_login: true`) after first admin is created.
-- Create named admin accounts (email + password; SSO only if 5 or fewer people).
+- Create named admin accounts (email + password). Free SSO only works while the whole gateway has 5 or fewer users in total (every user counts, any login type); otherwise skip SSO or buy Enterprise.
 - Roles: 1 to 2 `proxy_admin`, others `proxy_admin_viewer` or `internal_user`.
 - Write `tools/cru-gw`, a small Python CLI that reads `access/*.yaml` and calls the LiteLLM API:
   - `plan` shows what will change, `apply` makes the change
   - creates teams with budgets and allowed models
   - creates service account keys (per app/service) and personal keys (per user)
-  - sets key expiry, TPM/RPM limits, tags
+  - sets key expiry, TPM/RPM limits, metadata labels (key `tags` are Enterprise-only in v1.108.8)
   - rotates a key: create new, hand over, block old, delete later
   - new keys are shown once to the admin, never written to git
 - Changes go through pull requests, so we know who changed what and when (replaces the paid audit log).
@@ -95,7 +95,7 @@ Checks:
   - cost per day by team, app (key), user, model, provider
   - requests, tokens, errors, latency
   - top spenders, budget used vs budget left
-- Traffic and health metrics: Prometheus if it is free in the version we pin, else OpenTelemetry. **To verify in Phase 1**, since some older docs marked Prometheus as Enterprise.
+- Traffic and health metrics: Prometheus. Checked in the PoC on 2026-11-16: free in v1.108.8 (no license needed).
 - Alerts (Grafana): team over 80% of budget, error rate spike, provider down.
 - Decide what prompt/response content is logged. Default: log metadata and cost only, not full prompts, for privacy.
 

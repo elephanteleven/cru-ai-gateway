@@ -1,0 +1,6 @@
+# Local only (not used by Coolify): publishes the gateway on 127.0.0.1.
+# Loaded through COMPOSE_FILE in .env. Set GW_PORT there if 4000 is busy.
+services:
+  litellm:
+    ports:
+      - "127.0.0.1:${GW_PORT:-4000}:4000"

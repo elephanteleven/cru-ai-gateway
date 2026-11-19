@@ -58,14 +58,14 @@ Key idea: apps never see real provider keys. They get a LiteLLM "virtual key". C
 | Per-app access | Virtual keys with team, model list, budget, rate limits | Free |
 | Cost per request | Cost from model price map, returned in `x-litellm-response-cost`, saved in `LiteLLM_SpendLogs` | Free |
 | Cost by key / user / team / model | Spend logs and daily activity views | Free |
-| Cost by tag (e.g. project, department) | Tags on request, key, or team | Basic tracking appears free; tag **budgets** are Enterprise. Verify. |
+| Cost by tag (e.g. project, department) | Tags on request, key, or team | Tag **budgets** are Enterprise. **Checked in PoC (v1.108.8):** setting `tags` on a key returns 403 "only available for LiteLLM Enterprise users: tags". Free workaround: put labels in key `metadata`, and group by team/key in SQL. |
 | Spend reports (`/global/spend/report`) | Group by team, etc. | Enterprise |
 | Budgets and rate limits | Per key / team / user | Basic: free. Advanced (per-model per key, temp increase, soft-budget email): Enterprise |
 | Reliability | Load balancing, retries, fallbacks across providers | Free |
-| Monitoring | Prometheus, Langfuse, Datadog, OpenTelemetry, etc. | Free (team-based logging is Enterprise) |
+| Monitoring | Prometheus, Langfuse, Datadog, OpenTelemetry, etc. | Free (team-based logging is Enterprise). **Checked in PoC (v1.108.8):** `callbacks: ["prometheus"]` works with no license; `/metrics/` needs the master key. |
 | Guardrails / PII | Custom guardrails, Presidio PII masking | Free. Per-key/team guardrails and many built-in moderation plugins: Enterprise |
 | MCP gateway | Central MCP tool access | Free |
-| Staff login to Admin UI | SSO | Free up to 5 users, then Enterprise |
+| Staff login to Admin UI | SSO | Free only while the gateway has 5 or fewer users **in total** (all users, not only SSO users), then Enterprise. See 3.3 |
 | Who did what | Audit logs | Enterprise |
 | Org / team admins | RBAC | Enterprise |
 | Secrets | AWS / Azure / GCP / Vault secret managers, key rotation | Enterprise |
@@ -92,7 +92,8 @@ How LiteLLM does it (from the official docs, checked 2026-11-16):
 
 Login options:
 - **Email + password (free):** invite each admin from the Admin UI ("Invite User") or `POST /user/new`. They set their own password from the invite link. Password policy: 12+ chars with mixed types. Brute force lockout is built in.
-- **SSO (Google / Microsoft / Okta / OIDC):** free up to 5 users, then needs Enterprise.
+- **SSO (Google / Microsoft / Okta / OIDC):** free only while the whole gateway has **5 or fewer users in total**. The count is every row in `LiteLLM_UserTable` (code: `count_billable_users`, all users minus SCIM-deactivated ones), so email + password admins and users made only to own keys count too. With a 6th user, `/sso/key/generate` returns 403 "Enterprise" for everyone (tested 2026-11-19 in ../cru-ai-alt; code checked in v1.108.8 `ui_sso.py`).
+- **If SSO is turned on later (generic OIDC, e.g. Okta):** LiteLLM identifies the user by `GENERIC_USER_ID_ATTRIBUTE` (default `preferred_username`, usually the Okta login). If the login name changes in Okta, LiteLLM sees a new user. Set it to `sub` to key on the Okta user id instead (stable across renames, but a user deleted and re-created in Okta becomes a new user). Group to role needs `GENERIC_ROLE_MAPPINGS_*`. Group to team needs `team_mappings.team_ids_jwt_field: groups`, which only works with `STORE_MODEL_IN_DB=True`. (From ../cru-ai-alt/docs/sso-litellm.md; not tested in this repo.)
 - **Shared bootstrap login** (`UI_USERNAME` / `UI_PASSWORD` or master key): only for first setup. Turn it off after with `disable_env_credential_login: true` so every admin must use a named account.
 
 **B. Tokens for apps, services, and users**
@@ -114,7 +115,7 @@ Each key can have: allowed models, budget + reset period, TPM/RPM limits, expiry
 6. Set an expiry on personal keys (for example 90 days).
 
 **What forces Enterprise for this requirement:**
-- More than 5 people logging in with SSO (email + password stays free).
+- SSO when the gateway has more than 5 users in total (counting every user, not only SSO users). Email + password logins stay free at any size.
 - Delegating management to team admins instead of central proxy admins.
 - An audit log of which admin made which change. Important for an org service, so plan for it.
 - One-click key rotation (without it, rotate by creating a new key, then blocking or deleting the old one).
@@ -141,7 +142,7 @@ Sources: [providers](https://docs.litellm.ai/docs/providers), [Ollama](https://d
 
 | Missing in OSS | Workaround |
 |---|---|
-| SSO for more than 5 users | Use email + password accounts for admins (free). Keep SSO for at most 5. |
+| SSO when the gateway has more than 5 users in total | Free SSO only works if the **whole gateway** has 5 or fewer users (all rows in `LiteLLM_UserTable`, any login type). Mixing does not work: "email + password admins, SSO for up to 5" fails, because a 6th user of any kind turns SSO off for everyone. So: skip SSO (email + password for admins, team or service account keys for apps, no user rows for apps), or buy Enterprise. |
 | Audit log of admin actions | Keep admins few. Manage teams/keys through a script or GitOps repo so changes are in git history. Ship proxy logs to central logging. |
 | Team admin / org admin | Only central `proxy_admin`s create teams and keys. Use a request process (ticket/form). |
 | One-click key rotation | Create a new key, update the app, then block and delete the old key. |
@@ -178,7 +179,7 @@ From vendor blogs, so treat as leads, not facts:
 
 ## 6. Suggested next steps
 
-1. Confirm needs: which providers, rough monthly volume, how many teams/apps, does Cru need SSO for more than 5 admins, audit logs, and cost by department.
+1. Confirm needs: which providers, rough monthly volume, how many teams/apps, does Cru need SSO (only free if the whole gateway has 5 or fewer users), audit logs, and cost by department.
 2. Run a small proof of concept: LiteLLM (pinned version) + Postgres + Redis in Docker, 2 providers, 2 test teams, Prometheus + Grafana dashboard. Check that cost numbers match provider bills.
 3. Decide free vs Enterprise based on the gaps (SSO, audit logs, RBAC, spend reports). Ask LiteLLM sales for a quote and the 30-day trial.
 4. Do a quick side-by-side PoC with one alternative (e.g. Bifrost or Kong) using the same test.

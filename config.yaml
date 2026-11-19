@@ -1,0 +1,81 @@
+# Cru AI Gateway PoC: LiteLLM config
+# Free only: small local models (all <= 1B params, Q2_K) served by the llama.cpp router (service "llama"),
+# plus cloud models on the Gemini free tier.
+# The model ids after "openai/" must match the ids in MODELS in docker-compose.yml.
+
+# Shared settings for every local model.
+# DEMO price, not a real cost. Lets us test cost tracking and budgets with free models.
+x-local: &local
+  api_base: http://llama:8080/v1
+  api_key: os.environ/LLAMA_API_KEY
+  input_cost_per_token: 0.000001
+  output_cost_per_token: 0.000002
+
+model_list:
+  # Name apps should use. Later this can point to paid models with fallback to local.
+  - model_name: cru-chat
+    litellm_params: { <<: *local, model: openai/qwen3.5-0.8b }
+  # Default local model.
+  - model_name: cru-local
+    litellm_params: { <<: *local, model: openai/qwen3.5-0.8b }
+
+  # Every local model by its own name (for demos and comparisons).
+  - model_name: qwen3.5-0.8b    # Alibaba Qwen3.5, 0.77B, Apache 2.0
+    litellm_params: { <<: *local, model: openai/qwen3.5-0.8b }
+  - model_name: qwen3-0.6b      # Alibaba Qwen3, 0.6B, Apache 2.0
+    litellm_params: { <<: *local, model: openai/qwen3-0.6b }
+  - model_name: qwen2.5-0.5b    # Alibaba Qwen2.5 Instruct, 0.5B, Apache 2.0
+    litellm_params: { <<: *local, model: openai/qwen2.5-0.5b }
+  - model_name: gemma3-1b       # Google Gemma 3 IT, 1.0B, Gemma terms of use
+    litellm_params: { <<: *local, model: openai/gemma3-1b }
+  - model_name: gemma3-270m     # Google Gemma 3 IT, 0.27B, Gemma terms of use
+    litellm_params: { <<: *local, model: openai/gemma3-270m }
+  - model_name: smollm2-360m    # Hugging Face SmolLM2 Instruct, 0.36B, Apache 2.0
+    litellm_params: { <<: *local, model: openai/smollm2-360m }
+
+  # Cloud models on the Gemini FREE tier (demo only). Key: GEMINI_API_KEY in .env / Coolify.
+  # Free tiers may use prompts to train models: never send real or internal Cru data.
+  # Model ids checked on the official pages on 2026-11-17 (free tier, not deprecated).
+  # Prices come from LiteLLM's built-in price table, so cost shows what it WOULD cost on a paid plan.
+  # reasoning_effort: minimal stops the model from spending most of max_tokens on hidden "thinking".
+  # gemini-3.8-flash is also free but answered 503 "high demand" / hung for minutes on 2026-11-17, so 3.6 is used.
+  - model_name: gemini-3.6-flash          # Google Flash (previous generation, stable)
+    litellm_params: { model: gemini/gemini-3.6-flash, api_key: os.environ/GEMINI_API_KEY, reasoning_effort: minimal }
+  - model_name: gemini-3.5-flash-lite     # Google, light and fast
+    litellm_params: { model: gemini/gemini-3.5-flash-lite, api_key: os.environ/GEMINI_API_KEY }
+
+  # Demo of fallback: tries Gemini, then the local model (see router_settings).
+  # Groq (free tier, e.g. groq/openai/gpt-oss-120b) can be added later as a middle step.
+  # timeout: give up on Gemini after 30 s so the fallback answers quickly.
+  # num_retries: 0 because the default is 2 more tries of Gemini first. With a Gemini that hangs,
+  # the user waited 95 s (3 x 30 s) before cru-local answered (tested 2026-11-19 in ../cru-ai-alt).
+  - model_name: cru-cloud
+    litellm_params: { model: gemini/gemini-3.6-flash, api_key: os.environ/GEMINI_API_KEY, reasoning_effort: minimal, timeout: 30, num_retries: 0 }
+
+router_settings:
+  # If a model fails (no key, rate limit, outage), try the next one in the list.
+  fallbacks:
+    - cru-cloud: ["cru-local"]
+
+litellm_settings:
+  drop_params: true
+  request_timeout: 120
+  # false = keep prompt and response text (needed for store_prompts_in_spend_logs below).
+  # Set to true to keep only metadata and cost.
+  turn_off_message_logging: false
+  # Prometheus metrics at /metrics. Free in v1.108.8 (checked in the PoC, no license needed).
+  callbacks: ["prometheus"]
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/DATABASE_URL
+  # Save full prompt and response text of every request (Admin UI > Logs).
+  # Every admin, including proxy_admin_viewer, can read it. Demo only: no real Cru data.
+  store_prompts_in_spend_logs: true
+  # Delete request logs older than this, so the DB does not grow forever.
+  maximum_spend_logs_retention_period: "30d"
+  # Turn off the shared UI_USERNAME/UI_PASSWORD login so every admin uses a named account.
+  # ONLY set this to true after at least one named proxy_admin can log in
+  # (Admin UI > Internal Users > invite, open the link, set a password), or nobody can log in to the UI.
+  # The master key still works on the API if you get locked out; set back to false and redeploy.
+  disable_env_credential_login: false   # set to true after your own admin account works
