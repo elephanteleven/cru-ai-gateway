@@ -4,7 +4,7 @@ Uses [docker-compose.yml](../docker-compose.yml) at the repo root. Tested locall
 
 ## Server size
 
-Measured: about 650 MB RAM for litellm + postgres, plus 250 to 500 MB for llama (at most 2 models loaded at once). Plan for **at least 2 GB free RAM, 2 CPUs, and 7 GB disk** (images about 3.3 GB, six models about 2.2 GB, the database grows with traffic).
+Measured: about 650 MB RAM for litellm + postgres. No local models (all models are on OpenRouter). Plan for **at least 1.5 GB free RAM, 1 to 2 CPUs, and 5 GB disk** (litellm image about 1.7 GB, the database grows with traffic).
 
 ## Steps
 
@@ -16,12 +16,12 @@ Measured: about 650 MB RAM for litellm + postgres, plus 250 to 500 MB for llama 
 4. **Domain:** give the `litellm` service a domain with port 4000, for example `https://ai.example.org:4000`. The `:4000` only tells Coolify's proxy which container port to use; users call `https://ai.example.org`. Do not add `ports:`.
 5. **Environment variables:**
    - `LITELLM_MASTER_KEY`: **you set this.** It must start with `sk-`. Make one on your computer with `echo "sk-$(openssl rand -hex 32)"` and keep it in your password manager. It is the super-admin key for the API.
-   - `SERVICE_PASSWORD_POSTGRES`, `SERVICE_PASSWORD_LLAMA`, `SERVICE_PASSWORD_UI`, `SERVICE_PASSWORD_64_SALTKEY`: Coolify makes these. Never change `SERVICE_PASSWORD_64_SALTKEY` after the first start.
+   - `SERVICE_PASSWORD_POSTGRES`, `SERVICE_PASSWORD_UI`, `SERVICE_PASSWORD_64_SALTKEY`: Coolify makes these. Never change `SERVICE_PASSWORD_64_SALTKEY` after the first start.
    - `UI_USERNAME`: defaults to `admin`.
    - `SERVICE_URL_LITELLM_4000`: comes from the domain. Deploy is blocked while it is empty.
-   - `GEMINI_API_KEY`: optional, for the Gemini free-tier models. Cru staff paste them here. Leave empty to run local models only.
+   - `OPENROUTER_API_KEY`: needed for every model. Cru staff paste it here. Empty: the gateway starts, but every model call fails.
    - Ignore `COMPOSE_FILE` / `GW_PORT`; they are for local runs only.
-6. **Deploy.** The first start takes a while (image pulls + about 2.2 GB of models). `llama` has a 10 minute start period for this. All three services should become healthy.
+6. **Deploy.** The first start pulls the images. Both services should become healthy.
 7. **Check:** open `https://<your domain>/ui` and log in with `admin` and the `SERVICE_PASSWORD_UI` value from Coolify.
 
 ## After the first deploy
@@ -33,6 +33,7 @@ Measured: about 650 MB RAM for litellm + postgres, plus 250 to 500 MB for llama 
 ## Security notes
 
 - Once a domain is set, the Admin UI and API are on the public internet. Consider limiting `/ui` to Cru IPs or a VPN (not set up yet).
-- Only `litellm` is reachable from outside. `llama` also needs `SERVICE_PASSWORD_LLAMA`, so other containers on the server cannot use it freely.
+- Only `litellm` is reachable from outside.
+- Coolify at https://cru.engineer hosts other projects: only touch the cru-ai-gateway resource.
 - To upgrade, follow the [security rules in the README](../README.md#security-rules-important).
 - Backups: back up the `pgdata` volume (for example a nightly `pg_dump`). Not set up yet. Whether Coolify's built-in database backups cover a Postgres inside a compose app was not checked.

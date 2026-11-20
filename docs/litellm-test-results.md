@@ -5,7 +5,7 @@ models.
 Okta was replaced by a local Keycloak with the same kind of `groups` claim. **Not tested with a real Okta org.**
 Screenshots: `docs/screenshots/litellm-*.png`.
 
-Source: test scripts, Keycloak setup, and raw results are in https://github.com/elephanteleven/cru-ai-alt.
+Source: test scripts, Keycloak setup, and raw results are in https://github.com/elephanteleven/cru-ai-gateway-alt.
 
 | | LiteLLM |
 |---|---|

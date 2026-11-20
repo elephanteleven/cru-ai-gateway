@@ -7,7 +7,7 @@ Built on [LiteLLM](https://docs.litellm.ai/) (BerriAI), MIT open source core onl
 ## What is in this repo
 
 ```
-docker-compose.yml         the stack: litellm (gateway) + llama (local models) + postgres
+docker-compose.yml         the stack: litellm (gateway) + postgres
 docker-compose.local.yml   local only: publishes the gateway on 127.0.0.1
 config.yaml                LiteLLM settings and model list
 scripts/chat.sh            test client: send one message with a virtual key, like an app would
@@ -22,47 +22,24 @@ docs/screenshots/                  Admin UI screenshots from those tests
 | Service | Image (pinned by tag and digest) | Job |
 |---|---|---|
 | `litellm` | `ghcr.io/berriai/litellm-database:v1.108.8` (LTS, cosign verified) | Gateway. API, Admin UI at `/ui`, metrics at `/metrics/`. The only public service |
-| `llama` | `ghcr.io/ggml-org/llama.cpp:server-b12063` (2026-11-03 build) | Runs the local models in router mode. Downloads them on first start and checks sha256 |
 | `postgres` | `postgres:16.10-alpine` | Keys, users, teams, spend logs |
 
 ### Models
 
-All local, all **1B parameters or less, Q2_K**. One llama.cpp server in **router mode** serves them: a model loads on its first request, and at most 2 stay in memory (the least recently used one is unloaded). The list lives in `MODELS` in `docker-compose.yml` and in `config.yaml`.
+**Every model goes through [OpenRouter](https://openrouter.ai). No local models are deployed** (user decision, 2026-11-20). One key, `OPENROUTER_API_KEY`, in `.env` or Coolify, entered by Cru staff. OpenRouter charges for every call (except `openrouter/free`); set a credit limit on the key in OpenRouter and budgets on teams in LiteLLM.
 
-| Name to call | Model | Params | File | License |
-|---|---|---|---|---|
-| `cru-chat` | Qwen3.5 0.8B (name apps should use; later it can point to paid models) | | | |
-| `cru-local` | Qwen3.5 0.8B (default local model) | | | |
-| `qwen3.5-0.8b` | Qwen3.5 0.8B | 0.77B | 464 MB | Apache 2.0 |
-| `qwen3-0.6b` | Qwen3 0.6B | 0.6B | 296 MB | Apache 2.0 |
-| `qwen2.5-0.5b` | Qwen2.5 0.5B Instruct | 0.49B | 339 MB | Apache 2.0 |
-| `gemma3-1b` | Gemma 3 1B IT | 1.0B | 690 MB | Gemma terms of use |
-| `gemma3-270m` | Gemma 3 270M IT | 0.27B | 237 MB | Gemma terms of use |
-| `smollm2-360m` | SmolLM2 360M Instruct | 0.36B | 219 MB | Apache 2.0 |
+The name to call is the **OpenRouter model id**, for example `anthropic/claude-fable-5.2`. There are no alias names. The full list (38 models) with notes is in `config.yaml`; ids and prices were read from the OpenRouter models API on 2026-11-20.
 
-Total download about 2.2 GB. All have a **demo price** so cost and budget features can be tested with free models.
-
-Left out: Llama 3.2 1B (really 1.24B params), LFM2 (its license needs a paid deal above $10M yearly revenue), Granite 4.0 350M (no Q2_K file found).
-
-**Cloud models on the Gemini free tier** (demo only). They need `GEMINI_API_KEY` in `.env` or Coolify, made by Cru staff at [aistudio.google.com](https://aistudio.google.com). Without a key the model returns an error. Groq (free tier, e.g. `groq/openai/gpt-oss-120b`, 30 req/min, 1,000 req/day) was tried and left out for now; it can be added later. Model ids were checked on the official pages on 2026-11-17 (free tier, not deprecated).
-
-| Name to call | Provider | Free tier limits |
+| Group | Models, best first | Ranked by |
 |---|---|---|
-| `gemini-3.6-flash` | Google Gemini | shown only in AI Studio |
-| `gemini-3.5-flash-lite` | Google Gemini | shown only in AI Studio |
-| `cru-cloud` | **Fallback demo:** Gemini 3.6 Flash (30 s timeout, no retries), then `cru-local` | |
+| Frontier (10) | `anthropic/claude-fable-5.2`, `openai/gpt-6.2-astra`, `google/gemini-4-neon`, `google/gemini-4-carbon`, `anthropic/claude-opus-5.5`, `openai/gpt-6.2-sol`, `anthropic/claude-sonnet-5.5`, `google/gemini-4-hydrogen`, `openai/gpt-6.1-terra`, `google/gemini-4-argon` | [Artificial Analysis](https://artificialanalysis.ai/leaderboards/models) Intelligence Index v5.0.1 |
+| Open weights (10) | `moonshotai/kimi-k3.1-pro`, `deepseek/deepseek-v4.1-flash-1017`, `tencent/hy4-preview`, `inclusionai/ling-3.1-flash`, `moonshotai/kimi-k3`, `z-ai/glm-5.3`, `xiaomi/mimo-v2.6-pro`, `xiaomi/mimo-v2.6-flash`, `stepfun/step-5-preview`, `deepseek/deepseek-v4-pro` | [BenchLM open-source](https://benchlm.ai/best/open-source) (2026-11-19). Skipped: Qwen3.8 Max (no open weights on OpenRouter), Ornith-1.5-397B (not on OpenRouter) |
+| Small, fit one GPU of 96 GB or less (10) | `qwen/qwen3.8-27b`, `meta/muse-glimmer-30b`, `qwen/qwen3.6-27b`, `google/gemma-4-31b-it`, `microsoft/phi-4`, `qwen/qwen3.5-27b`, `qwen/qwen3.6-35b-a3b`, `google/gemma-4-26b-a4b-it`, `z-ai/glm-4.7-flash`, `qwen/qwen3.5-35b-a3b` | BenchLM. Rule used: 80B params or less (fits 96 GB at 8-bit). Sizes from model names, not checked against model cards. Skipped: not on OpenRouter, or failed the model check below |
+| Routers, like Jev (8) | `openrouter/fusion`, `openrouter/auto`, `typesafe/jev-router`, `nvidia/switchyard`, `openrouter/pareto-code`, `openrouter/auto-code`, `openrouter/auto-beta`, `openrouter/free` | No benchmark ranks routers; order is our judgment. OpenRouter has only these 8 routers, not 10 |
 
-- **Free tiers may use prompts to train models. Never send real or internal Cru data.**
-- Cost for these uses LiteLLM's real price table, so it shows what the call *would* cost on a paid plan.
-- The response header `x-litellm-model-group` shows which model really answered (useful in the fallback demo).
-- Tested 2026-11-17 with a real key (Thai prompt): `gemini-3.5-flash-lite` 4 s, `gemini-3.6-flash` 7 to 20 s (Google free tier speed varies), both good Thai. Cost rows saved in Postgres per model.
-- Fallback tested: with the key removed, `cru-cloud` was answered by `cru-local` in 6 s (`x-litellm-attempted-fallbacks: 1`).
-- Slow provider test (2026-11-19, a test server that answers after 45 s in place of Gemini): with the old setting LiteLLM tried it 3 times (router default `num_retries` 2), so `cru-local` answered after **94.7 s**. With `num_retries: 0` it tried once and `cru-local` answered after **30.8 s**.
-- Free tier daily limit: `gemini-3.6-flash` allows 20 requests per day per project. On 2026-11-19 it returned 429 "quota exceeded" and `cru-cloud` fell back to `cru-local` in 1 to 2 s.
-- `reasoning_effort: minimal` is set for 3.6 Flash. Without it the model spent about 285 of 300 tokens on hidden "thinking" and the answer was cut off.
-- Failed Gemini calls (timeouts) were still logged with a small input cost (about $0.00001 each). Keep in mind when reading cost reports.
-- `gemini-3.8-flash` is on the free tier too, but on 2026-11-17 it hung for over 2 minutes or returned 503 "high demand", even when called directly. So 3.6 Flash is used.
-- Free tier model lists change often. If a model stops working, check the provider's model and deprecation pages and update `config.yaml`.
+- **Cost:** LiteLLM v1.108.8 does not know prices for most of these models, so `config.yaml` sets `input_cost_per_token` / `output_cost_per_token` from OpenRouter's list. Routers have no price in `config.yaml`, but LiteLLM still showed the same cost as OpenRouter for them in the test below. Models with several providers can cost a bit more or less than the `config.yaml` price, because OpenRouter picks the provider per call.
+- **Rankings change often.** Re-check the boards and the OpenRouter list before a demo.
+- The model answer comes from the provider OpenRouter picks. Prompts go to OpenRouter and that provider: never send real or internal Cru data in the demo.
 
 ## Run it
 
@@ -84,13 +61,13 @@ Example call:
 ```bash
 curl http://127.0.0.1:4000/v1/chat/completions \
   -H "Authorization: Bearer <a virtual key>" -H "Content-Type: application/json" \
-  -d '{"model":"cru-chat","messages":[{"role":"user","content":"hello"}]}'
+  -d '{"model":"deepseek/deepseek-v4.1-flash-1017","messages":[{"role":"user","content":"hello"}]}'
 ```
 
 Or with the test client (needs bash, curl, python3; reads `GW_PORT` from `.env`, or set `GW_URL`):
 
 ```bash
-API_KEY=sk-... ./scripts/chat.sh -m cru-local "Hi, how are you?"
+API_KEY=sk-... ./scripts/chat.sh -m openrouter/auto "Hi, how are you?"
 ```
 
 It prints the answer, then which model really answered, time, tokens, cost, and fallbacks. `-v` shows the raw JSON, `-t` sets max tokens. The key is passed to curl in a temp file, so it does not show in `ps`.
@@ -118,11 +95,9 @@ It prints the answer, then which model really answered, time, tokens, cost, and 
 ## Decisions
 
 - **Open source only.** No LiteLLM Enterprise license, no code from LiteLLM's `enterprise/` folder.
-- **PoC uses free things only.** Six small local models (all 1B or less, Q2_K) so demos can compare them. Q4_K_M files give better answers if needed.
-- **Later:** paid models (GPT, Gemini, Claude, DeepSeek) and bigger local models through the same gateway.
+- **Models from OpenRouter only (2026-11-20).** Paid models are fine for the demo (user decision). No local LLM service is deployed. Earlier the PoC used six tiny local models (llama.cpp) and the Gemini free tier; see Test results.
 - **Access:** named login per admin; one key per app or service; personal keys for people; teams carry budgets, models, and limits.
 - **Privacy:** for the demo, full prompt and response text is saved and shown in Admin UI > Logs (`store_prompts_in_spend_logs: true`, `turn_off_message_logging: false`). Every admin, including `proxy_admin_viewer`, can read it. Logs older than 30 days are deleted (`maximum_spend_logs_retention_period`). Before real use, Cru must decide whether to keep text; set both back to keep only metadata and cost.
-- **llama.cpp server instead of Ollama:** its image is about 300 MB vs 3 GB, and it loads the same GGUF file.
 
 Paid-only in LiteLLM (we work around them): SSO once the gateway has more than 5 users **in total** (every user row counts, including email + password admins, so SSO cannot be kept "for a few"; skip SSO or buy Enterprise), audit logs, team/org admins, key rotation, `/global/spend/report`, **tags on keys** (403 in v1.108.8; use key `metadata` instead), tag budgets, secret managers. See section 3.3 of the study doc.
 
@@ -135,11 +110,12 @@ LiteLLM had supply chain attacks in 2026 (bad 1.82.7/1.82.8 in March, 1.107.0 in
 - LiteLLM signing key: sha256 of the PEM is `e3fe3e08c44b16407fe0b37c43b4f8b603b3a0f4ee74c29e647bc022d762c2c0` (from their incident post). Verify with:
   `docker run --rm ghcr.io/sigstore/cosign/cosign:v2.4.1 verify --key https://raw.githubusercontent.com/BerriAI/litellm/e82a3c646908ba0a6ee0beddc4310d7a6cac4065/cosign.pub ghcr.io/berriai/litellm-database:v1.108.8`
   Releases from v1.111.0-dev.3 on use keyless cosign instead.
-- For llama.cpp, pick a `server-bNNNNN` tag at least a week or two old (they publish many builds a day).
 - Secrets live only in `.env` (local, git-ignored) or in Coolify. Never commit, print, or paste them. Real provider keys are entered by Cru staff only.
 - Set `SERVICE_PASSWORD_64_SALTKEY` once and never change it (it encrypts data in the DB).
 
 ## Test results (2026-11-16/17, Linux x86_64, CPU only)
+
+These were run with the old setup (local llama.cpp models, Gemini free tier). The gateway features (keys, teams, limits, logs) do not depend on the models.
 
 All 13 checks passed, first with `docker run`, then with this compose file. (The test script was removed later to keep the repo small.)
 
@@ -173,19 +149,33 @@ Six-model check (2026-11-17), through the gateway, first call includes loading t
 
 All are fine for showing the gateway, not for real use.
 
+## OpenRouter model check (2026-11-20, local, real key)
+
+One call per model through the gateway ("Reply with one word: OK", `max_tokens` 300). Whole run cost about $0.012 (OpenRouter `usage.cost`).
+
+- **35 of 38 answered** "OK" in 0.7 to 8 s.
+- Cost in LiteLLM (`x-litellm-response-cost`) matched OpenRouter's `usage.cost` exactly for 24 of the 35. The rest were off by a little (example: `z-ai/glm-5.3` $0.00007 in LiteLLM vs $0.00016 in OpenRouter) because the provider OpenRouter picked charged a different price than the one in `config.yaml`. Use the OpenRouter bill as the real number.
+- Failed:
+
+| Model | Error | Why |
+|---|---|---|
+| `prism-ml/ternary-bonsai-2-27b` | 404 | Its only provider does not meet the OpenRouter account's zero data retention (ZDR) setting. Kept that setting on. |
+| `liquid/lfm-2.5-24b-a2b` | 504 after ~78 s, twice | Its only provider (Liquid) timed out. |
+| `openrouter/free` | 429 once | Free models are rate limited. OK on retry. |
+
+The two broken small models were replaced by the next ones on BenchLM that fit: `z-ai/glm-4.7-flash` (#64, 30B A3B) and `qwen/qwen3.5-35b-a3b` (#71, 35B A3B). Both answered on 2 of 2 calls, cost matched OpenRouter. Notes: one `glm-4.7-flash` call took 54 s (the other 3 s), and one `qwen3.5-35b-a3b` call came back with empty text because the model spent the 300 tokens on thinking; give these models a higher `max_tokens`.
+
 ## Known issues
 
 - `PROXY_BASE_URL` must not be empty (LiteLLM then builds broken links); it comes from `SERVICE_URL_LITELLM_4000`, which is required.
-- No one-shot init container: plain `docker compose` rejects Coolify's `exclude_from_hc` key, so `llama` downloads its model itself before starting.
 - On the 8 GB M1 Mac there is no `docker compose` plugin and Homebrew belongs to another user (do not `brew install`). To run locally there, add the compose plugin binary under `~/.docker/cli-plugins/` (not done yet).
 - Port 4000 may be busy on a dev machine; set `GW_PORT` in `.env`.
 
 ## Next steps
 
-1. **User:** commit and push, then deploy on Coolify with [docs/coolify.md](docs/coolify.md).
+1. Deploy on Coolify (https://cru.engineer) with [docs/coolify.md](docs/coolify.md). Touch only the cru-ai-gateway resource there, never other projects.
 2. After the first Coolify deploy: check domain, healthchecks, the `config.yaml` mount, and that invite links use the public URL. Fix the guide with what we learn.
 3. Make your own admin login, then turn off the shared `admin` login.
 4. Backups for the Postgres volume; limit `/ui` to Cru IPs or a VPN.
 5. Cost dashboard (Grafana on `LiteLLM_SpendLogs` and Prometheus).
-6. Optional: add Groq as a second cloud provider (between Gemini and local in the `cru-cloud` fallback).
-7. Later, when asked: Phase 0 questions in [docs/implementation-plan.md](docs/implementation-plan.md) (production host, GPU, data rules, logging, size, budgets).
+6. Later, when asked: Phase 0 questions in [docs/implementation-plan.md](docs/implementation-plan.md) (production host, GPU, data rules, logging, size, budgets).

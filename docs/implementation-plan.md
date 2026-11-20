@@ -23,7 +23,7 @@ One open source AI gateway (LiteLLM, MIT core only) that:
 ## Proposed repo layout
 
 ```
-cru-ai/
+cru-ai-gateway/
   docker-compose.yml        # gateway + postgres + redis + monitoring + local model
   .env.example              # names of secrets, no values
   litellm/config.yaml       # models, routing, fallbacks, prices
