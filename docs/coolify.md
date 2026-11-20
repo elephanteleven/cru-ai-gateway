@@ -18,7 +18,7 @@ Measured: about 650 MB RAM for litellm + postgres. No local models (all models a
    - `LITELLM_MASTER_KEY`: **you set this.** It must start with `sk-`. Make one on your computer with `echo "sk-$(openssl rand -hex 32)"` and keep it in your password manager. It is the super-admin key for the API.
    - `SERVICE_PASSWORD_POSTGRES`, `SERVICE_PASSWORD_UI`, `SERVICE_PASSWORD_64_SALTKEY`: Coolify makes these. Never change `SERVICE_PASSWORD_64_SALTKEY` after the first start.
    - `UI_USERNAME`: defaults to `admin`.
-   - `SERVICE_URL_LITELLM_4000`: comes from the domain. Deploy is blocked while it is empty.
+   - `SERVICE_URL_LITELLM` and `SERVICE_URL_LITELLM_4000`: come from the domain. `PROXY_BASE_URL` uses `SERVICE_URL_LITELLM` (no port); Coolify v4.7.6 adds `:4000` to the `_4000` one.
    - `OPENROUTER_API_KEY`: needed for every model. Cru staff paste it here. Empty: the gateway starts, but every model call fails.
    - Ignore `COMPOSE_FILE` / `GW_PORT`; they are for local runs only.
 6. **Deploy.** The first start pulls the images. Both services should become healthy.

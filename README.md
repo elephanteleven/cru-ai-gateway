@@ -167,7 +167,7 @@ The two broken small models were replaced by the next ones on BenchLM that fit: 
 
 ## Known issues
 
-- `PROXY_BASE_URL` must not be empty (LiteLLM then builds broken links); it comes from `SERVICE_URL_LITELLM_4000`, which is required.
+- `PROXY_BASE_URL` must not be empty (LiteLLM then builds broken links); it comes from `SERVICE_URL_LITELLM`, which is required. Do not use `SERVICE_URL_LITELLM_4000` for it: Coolify v4.7.6 adds `:4000` to that one, so the login redirect went to `https://<domain>:4000` and failed (seen on the first Coolify deploy, 2026-11-20).
 - On the 8 GB M1 Mac there is no `docker compose` plugin and Homebrew belongs to another user (do not `brew install`). To run locally there, add the compose plugin binary under `~/.docker/cli-plugins/` (not done yet).
 - Port 4000 may be busy on a dev machine; set `GW_PORT` in `.env`.
 

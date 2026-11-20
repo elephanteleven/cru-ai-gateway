@@ -44,8 +44,9 @@ services:
       UI_USERNAME: ${UI_USERNAME:-admin}
       UI_PASSWORD: ${SERVICE_PASSWORD_UI:?}
       DATABASE_URL: postgresql://litellm:${SERVICE_PASSWORD_POSTGRES:?}@postgres:5432/litellm
-      # Public URL, used in invite links and UI redirects.
-      PROXY_BASE_URL: ${SERVICE_URL_LITELLM_4000:?}
+      # Public URL, used in invite links and UI redirects. Use SERVICE_URL_LITELLM, not _4000:
+      # Coolify v4.7.6 puts ":4000" on the end of SERVICE_URL_LITELLM_4000, which breaks the login redirect.
+      PROXY_BASE_URL: ${SERVICE_URL_LITELLM:?}
       # OpenRouter key for every model. Cru staff put the real value in Coolify / .env, never in git.
       # Empty: the gateway starts, but every model call fails.
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
