@@ -15,6 +15,8 @@ scripts/chat.sh            test client: send one message with a virtual key, lik
 docs/coolify.md            how to deploy on Coolify
 docs/litellm-ai-gateway-study.md   research: features, free vs paid, security
 docs/implementation-plan.md        full plan (on hold)
+docs/litellm-test-results.md       API, logs, and SSO test results (2026-11-19/20)
+docs/screenshots/                  Admin UI screenshots from those tests
 ```
 
 | Service | Image (pinned by tag and digest) | Job |
@@ -101,10 +103,15 @@ It prints the answer, then which model really answered, time, tokens, cost, and 
 - **Cost:** Usage pages in the UI, the `LiteLLM_SpendLogs` table in Postgres, and Prometheus metrics at `/metrics/` (needs the master key).
 
 **What the logs show:**
-- Every refused call is logged in `LiteLLM_SpendLogs` (status `failure`) with the key, team, user, and the reason. The prompt is kept only for rate-limited calls (429), not for "model not allowed" (403) or a blocked key (401). (Tested 2026-11-19 in ../cru-ai-alt.)
+- Every refused call is logged in `LiteLLM_SpendLogs` (status `failure`) with the key, team, user, and the reason. The prompt is kept only for rate-limited calls (429), not for "model not allowed" (403) or a blocked key (401). (Tested 2026-11-19.)
 - With `store_prompts_in_spend_logs: true` (on now, for the demo), every admin, `proxy_admin_viewer` included, can read every prompt and answer in Logs.
 
 **SSO (not set up):** free only while the whole gateway has 5 or fewer users in total. If it is turned on later, see "Login options" in [the study doc](docs/litellm-ai-gateway-study.md) for `GENERIC_USER_ID_ATTRIBUTE` (use `sub`), group to role, and group to team.
+
+**More test facts** (2026-11-19/20, see [docs/litellm-test-results.md](docs/litellm-test-results.md)):
+- **Offboarding:** disabling a person in Okta stops new SSO logins, but their API keys keep working. An admin must block or delete their keys by hand. SCIM (automatic offboarding) is Enterprise only.
+- **Team keys for users:** an `internal_user` can make personal keys. To make a key inside their team, an admin must allow `/key/generate` once per team (`/team/permissions_update`).
+- **SSO settings gotcha:** `PATCH /update/sso_settings` with only some fields saves nulls for the rest, and DB values override env, so SSO silently falls back to password login. Always send the full set.
 
 **Turn off the shared `admin` login** once your own admin login works: set `disable_env_credential_login: true` in `config.yaml`, then redeploy. If you get locked out, the master key still works on the API; set it back to `false`.
 

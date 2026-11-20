@@ -92,8 +92,8 @@ How LiteLLM does it (from the official docs, checked 2026-11-16):
 
 Login options:
 - **Email + password (free):** invite each admin from the Admin UI ("Invite User") or `POST /user/new`. They set their own password from the invite link. Password policy: 12+ chars with mixed types. Brute force lockout is built in.
-- **SSO (Google / Microsoft / Okta / OIDC):** free only while the whole gateway has **5 or fewer users in total**. The count is every row in `LiteLLM_UserTable` (code: `count_billable_users`, all users minus SCIM-deactivated ones), so email + password admins and users made only to own keys count too. With a 6th user, `/sso/key/generate` returns 403 "Enterprise" for everyone (tested 2026-11-19 in ../cru-ai-alt; code checked in v1.108.8 `ui_sso.py`).
-- **If SSO is turned on later (generic OIDC, e.g. Okta):** LiteLLM identifies the user by `GENERIC_USER_ID_ATTRIBUTE` (default `preferred_username`, usually the Okta login). If the login name changes in Okta, LiteLLM sees a new user. Set it to `sub` to key on the Okta user id instead (stable across renames, but a user deleted and re-created in Okta becomes a new user). Group to role needs `GENERIC_ROLE_MAPPINGS_*`. Group to team needs `team_mappings.team_ids_jwt_field: groups`, which only works with `STORE_MODEL_IN_DB=True`. (From ../cru-ai-alt/docs/sso-litellm.md; not tested in this repo.)
+- **SSO (Google / Microsoft / Okta / OIDC):** free only while the whole gateway has **5 or fewer users in total**. The count is every row in `LiteLLM_UserTable` (code: `count_billable_users`, all users minus SCIM-deactivated ones), so email + password admins and users made only to own keys count too. With a 6th user, `/sso/key/generate` returns 403 "Enterprise" for everyone (tested 2026-11-19, see [litellm-test-results.md](litellm-test-results.md); code checked in v1.108.8 `ui_sso.py`).
+- **If SSO is turned on later (generic OIDC, e.g. Okta):** LiteLLM identifies the user by `GENERIC_USER_ID_ATTRIBUTE` (default `preferred_username`, usually the Okta login). If the login name changes in Okta, LiteLLM sees a new user. Set it to `sub` to key on the Okta user id instead (stable across renames, but a user deleted and re-created in Okta becomes a new user). Group to role needs `GENERIC_ROLE_MAPPINGS_*`. Group to team needs `team_mappings.team_ids_jwt_field: groups`, which only works with `STORE_MODEL_IN_DB=True`. (Tested with Keycloak as an Okta stand-in, see [litellm-test-results.md](litellm-test-results.md). Not tested with a real Okta org.)
 - **Shared bootstrap login** (`UI_USERNAME` / `UI_PASSWORD` or master key): only for first setup. Turn it off after with `disable_env_credential_login: true` so every admin must use a named account.
 
 **B. Tokens for apps, services, and users**
@@ -167,23 +167,12 @@ What they changed: rotated the signing key (Oct 23), and since v1.111.0-dev.3 re
 4. Keep provider keys in a secret manager, give the gateway only the access it needs, and limit its outbound network to the provider endpoints.
 5. Have a key rotation runbook ready (provider keys, master key, DB password).
 
-## 5. Other options to compare
-
-From vendor blogs, so treat as leads, not facts:
-
-- **Bifrost** (Go, Apache-2.0): pitched as faster, fewer features gated.
-- **Kong AI Gateway**: good if Cru already uses Kong. Advanced AI proxy needs a paid license.
-- **Envoy AI Gateway, Higress, WSO2 AI Gateway**: Envoy-based options.
-- **Portkey**: open gateway is MIT, but reports say Palo Alto Networks bought it in May 2026 and the OSS repo has slowed. Check before relying on it.
-- **Cloud native** (Azure API Management AI gateway, AWS Bedrock, etc.): less to run if Cru is on one cloud.
-
-## 6. Suggested next steps
+## 5. Suggested next steps
 
 1. Confirm needs: which providers, rough monthly volume, how many teams/apps, does Cru need SSO (only free if the whole gateway has 5 or fewer users), audit logs, and cost by department.
 2. Run a small proof of concept: LiteLLM (pinned version) + Postgres + Redis in Docker, 2 providers, 2 test teams, Prometheus + Grafana dashboard. Check that cost numbers match provider bills.
 3. Decide free vs Enterprise based on the gaps (SSO, audit logs, RBAC, spend reports). Ask LiteLLM sales for a quote and the 30-day trial.
-4. Do a quick side-by-side PoC with one alternative (e.g. Bifrost or Kong) using the same test.
-5. Write the security plan from section 4 before any production use.
+4. Write the security plan from section 4 before any production use.
 
 ## Sources
 
@@ -201,4 +190,3 @@ Third party:
 - JFrog on 1.107.0: https://research.jfrog.com/post/litellm-hijacked-again/
 - JFrog on March: https://research.jfrog.com/post/litellm-compromised-teampcp/
 - TrueFoundry LiteLLM pricing guide (unverified prices): https://www.truefoundry.com/blog/litellm-pricing-guide
-- Alternatives roundup (vendor blog): https://getmaxim.ai/articles/top-litellm-alternatives-in-2026/

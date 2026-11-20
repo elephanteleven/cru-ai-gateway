@@ -48,7 +48,7 @@ model_list:
   # Groq (free tier, e.g. groq/openai/gpt-oss-120b) can be added later as a middle step.
   # timeout: give up on Gemini after 30 s so the fallback answers quickly.
   # num_retries: 0 because the default is 2 more tries of Gemini first. With a Gemini that hangs,
-  # the user waited 95 s (3 x 30 s) before cru-local answered (tested 2026-11-19 in ../cru-ai-alt).
+  # the user waited 95 s (3 x 30 s) before cru-local answered (tested 2026-11-19).
   - model_name: cru-cloud
     litellm_params: { model: gemini/gemini-3.6-flash, api_key: os.environ/GEMINI_API_KEY, reasoning_effort: minimal, timeout: 30, num_retries: 0 }
 
